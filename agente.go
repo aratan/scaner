@@ -1,0 +1,182 @@
+// FICHERO: agente.go
+package main
+
+import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"log"
+	"math/big"
+	"net/http"
+	"os"
+	"os/exec"
+	"time"
+
+	"github.com/spf13/cobra"
+)
+
+// CommandRequest define la estructura de una orden enviada al agente.
+type CommandRequest struct {
+	Comando string   `json:"comando"`
+	Args    []string `json:"args"`
+}
+
+// CommandResponse define la estructura de la respuesta del agente.
+type CommandResponse struct {
+	Output string `json:"output"`
+	Error  string `json:"error,omitempty"`
+}
+
+var agentPort string
+var apiKey string
+
+// NewAgentCmd crea el comando 'agent'.
+func NewAgentCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "agent",
+		Short: "Inicia el agente para control remoto (C2)",
+		Long: `Ejecuta un servidor HTTPS seguro en segundo plano que espera órdenes.
+Permite controlar esta herramienta de forma remota en una máquina comprometida.
+Genera automáticamente certificados SSL (cert.pem, key.pem) si no existen.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			if apiKey == "" {
+				log.Fatal("Error: Se requiere una clave API secreta (-k) para asegurar el agente.")
+			}
+			startAgentServer(agentPort, apiKey)
+		},
+	}
+
+	cmd.Flags().StringVarP(&agentPort, "port", "p", "4443", "Puerto de escucha para el agente")
+	cmd.Flags().StringVarP(&apiKey, "key", "k", "", "Clave API secreta para la autenticación")
+
+	return cmd
+}
+
+// startAgentServer configura e inicia el servidor HTTPS del agente.
+func startAgentServer(port, key string) {
+	// Asegurarse de que los certificados SSL existen, si no, crearlos.
+	generateCertificates()
+
+	// Configurar los endpoints de la API
+	mux := http.NewServeMux()
+	commandHandler := http.HandlerFunc(handleCommand)
+	mux.Handle("/command", authMiddleware(commandHandler, key))
+	mux.HandleFunc("/", handleRoot)
+
+	log.Printf("Iniciando agente SYNAPSE en modo seguro (HTTPS) en el puerto %s...", port)
+	log.Printf("Utiliza la clave API para enviar comandos a https://<host>:%s/command", port)
+
+	// Iniciar el servidor TLS
+	err := http.ListenAndServeTLS(":"+port, "cert.pem", "key.pem", mux)
+	if err != nil {
+		log.Fatalf("Error fatal al iniciar el servidor del agente: %v", err)
+	}
+}
+
+// handleRoot es un endpoint simple para verificar que el agente está vivo.
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintln(w, "SYNAPSE Agent Activo. Esperando órdenes en /command.")
+}
+
+// authMiddleware protege los endpoints que requieren autenticación.
+func authMiddleware(next http.Handler, expectedKey string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clientKey := r.Header.Get("X-API-Key")
+		if clientKey != expectedKey {
+			http.Error(w, "Acceso no autorizado", http.StatusUnauthorized)
+			log.Printf("Intento de conexión fallido desde %s con clave incorrecta.", r.RemoteAddr)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// handleCommand recibe y ejecuta los comandos.
+func handleCommand(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req CommandRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Error al decodificar el cuerpo de la petición: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Orden recibida desde %s: comando='%s', args=%v", r.RemoteAddr, req.Comando, req.Args)
+
+	// Obtener la ruta del ejecutable actual para llamarse a sí mismo
+	executable, err := os.Executable()
+	if err != nil {
+		http.Error(w, "No se pudo encontrar la ruta del ejecutable: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Construir el comando completo (ej: 'scaner-pro.exe scan 192.168.1.1 80')
+	fullArgs := append([]string{req.Comando}, req.Args...)
+	cmd := exec.Command(executable, fullArgs...)
+
+	// Ejecutar el comando y capturar la salida (stdout y stderr combinados)
+	output, err := cmd.CombinedOutput()
+
+	resp := CommandResponse{
+		Output: string(output),
+	}
+	if err != nil {
+		resp.Error = err.Error()
+		log.Printf("Error al ejecutar la orden '%s': %s", req.Comando, err.Error())
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// generateCertificates crea cert.pem y key.pem si no existen.
+func generateCertificates() {
+	if _, err := os.Stat("cert.pem"); err == nil {
+		// Los archivos ya existen
+		return
+	}
+
+	log.Println("Generando nuevos certificados SSL (cert.pem, key.pem)...")
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		log.Fatalf("Fallo al generar la clave privada: %v", err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"SYNAPSE Agent"},
+			CommonName:   "SYNAPSE C2",
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(10, 0, 0), // Válido por 10 años
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		log.Fatalf("Fallo al crear el certificado: %v", err)
+	}
+
+	// Guardar el certificado
+	certOut, _ := os.Create("cert.pem")
+	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	certOut.Close()
+
+	// Guardar la clave privada
+	keyOut, _ := os.Create("key.pem")
+	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	keyOut.Close()
+
+	log.Println("Certificados generados correctamente.")
+}
