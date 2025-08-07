@@ -28,3 +28,5 @@ El framework ejecuta las acciones decididas por la IA (o aprobadas por el usuari
 - Lanzar scripts  
 - Establecer túneles  
 - Buscar más información
+
+![Designer](https://github.com/user-attachments/assets/f29856a4-9f58-4f1a-a080-75564bfeb101)
