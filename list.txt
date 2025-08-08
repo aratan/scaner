@@ -1,0 +1,8 @@
+wp_admin.php
+wp_admintest
+index.php
+index.html
+index.htm
+index.aspx
+index.asp
+login.asp

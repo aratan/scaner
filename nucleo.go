@@ -1,4 +1,4 @@
-// FICHERO: nucleo.go (VERSIÓN CONNECT SCAN - FIABLE)
+// FICHERO: nucleo.go
 package main
 
 import (

@@ -1,0 +1,15 @@
+{
+  "informe_humano": "Hemos encontrado un servidor web en 192.168.1.50. Recomiendo un escaneo de directorios para encontrar un punto de entrada.",
+  "proxima_accion": {
+    "accion": "fuzz-directorios-web",
+    "parametros": {
+      "url": "http://192.168.1.1"
+    },
+    "requiere_input": [
+      {
+        "nombre": "list.txt",
+        "descripcion": "."
+      }
+    ]
+  }
+}

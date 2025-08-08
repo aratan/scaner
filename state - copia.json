@@ -1,0 +1,12 @@
+{
+  "mission_name": "ClienteX",
+  "start_time": "2023-10-27T10:00:00Z",
+  "hosts": {},
+  "log": [
+    {
+      "timestamp": "2023-10-27T10:00:00Z",
+      "actor": "Sistema",
+      "entry": "Misión iniciada."
+    }
+  ]
+}
