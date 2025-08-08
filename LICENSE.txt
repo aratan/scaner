@@ -1,0 +1,19 @@
+Copyright © 2025 Aratan – Seed42.uk. Todos los derechos reservados.
+
+Este software (SYNAPSE Framework) es propiedad exclusiva del autor. Está prohibida su copia, modificación, distribución, ingeniería inversa o uso no autorizado, salvo consentimiento explícito por escrito.
+
+🔒 Restricciones:
+- No se permite el uso comercial sin licencia adquirida.
+- No se permite la redistribución del código fuente ni de binarios.
+- No se permite la modificación del software ni la creación de obras derivadas.
+- No se permite el uso en actividades ilegales, ofensivas o que violen derechos de terceros.
+
+📜 Uso Autorizado:
+- El uso está limitado a fines educativos, de investigación o pruebas internas, siempre que no se infrinjan las restricciones anteriores.
+- El autor puede revocar el acceso en cualquier momento si se detecta uso indebido.
+
+⚠️ Advertencia:
+Este software puede interactuar con sistemas informáticos de forma automatizada. El usuario asume toda responsabilidad por su uso. El autor no se hace responsable de daños directos o indirectos derivados del uso del software.
+
+Para obtener una licencia comercial o institucional, contactar a: [tu correo o sitio web]
+
