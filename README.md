@@ -158,9 +158,13 @@ Dentro del chat, puedes preguntar:
 resume los hallazgos.
 ¿cuál es el host más interesante?
 propón un plan de ataque para 10.10.20.55.
+
 ### Fase 2: Infiltración y Explotación
+
 La IA te propondrá acciones. Si las autorizas, SYNAPSE las ejecutará.
-Ejemplo de Interacción (Fuzzing):
+## Ejemplo de Interacción (Fuzzing):
+
+```bash
 [SYNAPSE]: He encontrado un servidor web en http://10.10.20.55:8080. Recomiendo un escaneo de directorios para encontrar un panel de administración.
 [PRÓXIMA ACCIÓN RECOMENDADA]: fuzz web-dir -u http://10.10.20.55:8080 -w ./wordlists/common.txt
 ¿Proceder? (s/n) > s
@@ -168,8 +172,10 @@ Ejemplo de Interacción (Fuerza Bruta):
 [SYNAPSE]: El escaneo ha revelado un puerto SSH en 10.10.20.70. El siguiente paso lógico es intentar un ataque de fuerza bruta con credenciales comunes.
 [PRÓXIMA ACCIÓN RECOMENDADA]: bruteforce ssh -t 10.10.20.70 -U ./wordlists/users.txt -P ./wordlists/passwords.txt
 ¿Proceder? (s/n) > s
+```
 
 ### Fase 3: Post-Explotación y Movimiento Lateral
+
 Una vez dentro, el objetivo es expandir tu control.
 Caza de Botín (Looting):
 Despliega el agente en el objetivo y ordénale que busque secretos.
@@ -184,6 +190,7 @@ Despliega el agente en el objetivo y ordénale que busque secretos.
 ## La IA analizará los resultados:
 [SYNAPSE]: ¡Botín encontrado! Se ha localizado una clave privada SSH en /home/dev/.ssh/id_rsa. Recomiendo usar esta clave para intentar pivotar al host 10.10.20.90, que estaba en la misma subred.
 Pivoting con Proxy SOCKS (El Portal):
+
 Esta es la técnica definitiva para dominar la red interna.
 Activa el proxy en la máquina comprometida (a través del agente C2):
 
