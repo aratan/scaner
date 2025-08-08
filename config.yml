@@ -1,4 +1,4 @@
-github_repo: tu_usuario_github/tu_repositorio
+github_repo: aratan/SYNAPSE
 default_ollama_model: gemma3:4b
 alerts:
   smtp:
