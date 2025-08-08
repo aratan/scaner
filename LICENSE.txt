@@ -15,5 +15,5 @@ Este software (SYNAPSE Framework) es propiedad exclusiva del autor. Está prohib
 ⚠️ Advertencia:
 Este software puede interactuar con sistemas informáticos de forma automatizada. El usuario asume toda responsabilidad por su uso. El autor no se hace responsable de daños directos o indirectos derivados del uso del software.
 
-Para obtener una licencia comercial o institucional, contactar a: [tu correo o sitio web]
+Para obtener una licencia comercial o institucional, contactar a: [https://seed42.uk]
 
