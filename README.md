@@ -22,7 +22,7 @@ Ejemplo:
 
 *La gran mejora.*
 
-### 🛠️ Actuar (Exploit, Pivot, Agent)
+### 🛠️ Actuar (Exploit, Pivot, Agent, C2, iSql y más...)
 El framework ejecuta las acciones decididas por la IA (o aprobadas por el usuario):  
 - Lanzar scripts  
 - Establecer túneles  
