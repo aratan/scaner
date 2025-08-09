@@ -223,5 +223,6 @@ Una vez que tienes acceso a una máquina importante, asegúrate de que sobreviva
 # Comando ejecutado en el objetivo a través del agente
 scaner-pro persist install -k "clave_secreta_para_el_reinicio"
 
+algunas funciones como arp, replay y scaneos syn necesitan https://npcap.com/dist/npcap-1.83.exe
 2025 Aratan - Seed42.uk
 
