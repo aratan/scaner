@@ -68,6 +68,9 @@ func NewMissionCmd() *cobra.Command {
 	cmd.AddCommand(newMissionStatusCmd())
 	cmd.AddCommand(newMissionChatCmd())
 	cmd.AddCommand(newMissionAutonomousCmd())
+
+	addStrategyCommands(cmd) 
+	
 	return cmd
 }
 

@@ -1,4 +1,4 @@
-// FICHERO: fuzzer.go (VERSIÓN 2.1 CON FLAG CORREGIDO)
+// FICHERO: fuzzer.go (VERSIÓN 2.4 - A PRUEBA DE PÁNICO)
 package main
 
 import (
@@ -43,18 +43,12 @@ func newWebDirFuzzCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&targetURL, "url", "u", "", "URL base del objetivo (ej: http://example.com)")
 	cmd.Flags().StringVarP(&wordlistPath, "wordlist", "w", "", "Ruta al fichero de diccionario")
 	cmd.Flags().IntVarP(&concurrency, "concurrency", "c", 50, "Número de hilos concurrentes")
-
-	// --- LÍNEA CORREGIDA ---
-	// El shorthand "hc" ha sido cambiado a "H" (mayúscula).
 	cmd.Flags().StringVarP(&hideCodes, "hide-codes", "H", "404", "Códigos de estado HTTP a ocultar, separados por coma (ej: 404,302)")
-	// --- FIN DE LA CORRECCIÓN ---
-
 	cmd.Flags().BoolVarP(&showProgress, "progress", "p", true, "Muestra el progreso en tiempo real")
 	return cmd
 }
 
 func runWebDirFuzzer(baseURL, wordlistPath string, concurrency int, hideCodesStr string, showProgress bool) {
-	// Parsear los códigos de estado a ocultar
 	hideCodesMap := make(map[int]bool)
 	for _, codeStr := range strings.Split(hideCodesStr, ",") {
 		code, err := strconv.Atoi(strings.TrimSpace(codeStr))
@@ -68,9 +62,7 @@ func runWebDirFuzzer(baseURL, wordlistPath string, concurrency int, hideCodesStr
 		log.Fatalf("Error al abrir el diccionario: %v", err)
 	}
 	defer file.Close()
-
 	lines, _ := countLines(wordlistPath)
-
 	if !strings.HasSuffix(baseURL, "/") {
 		baseURL += "/"
 	}
@@ -82,7 +74,6 @@ func runWebDirFuzzer(baseURL, wordlistPath string, concurrency int, hideCodesStr
 	tasks := make(chan string)
 	var requestsCount int64
 
-	// Iniciar workers
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
 		go func() {
@@ -95,15 +86,36 @@ func runWebDirFuzzer(baseURL, wordlistPath string, concurrency int, hideCodesStr
 				req, _ := http.NewRequest("GET", fullURL, nil)
 				req.Header.Set("User-Agent", "SYNAPSE Fuzzer/1.0")
 
+				// --- INICIO DE LA CORRECCIÓN FINAL Y DEFINITIVA ---
 				resp, err := client.Do(req)
+
+				// Paso 1: Comprobar el error de red. Si existe, la respuesta es inútil.
 				if err != nil {
 					continue
 				}
 
-				if !hideCodesMap[resp.StatusCode] {
-					fmt.Printf("\r[+] Encontrado: %-60s (Código: %d, Tamaño: %d)\n", fullURL, resp.StatusCode, resp.ContentLength)
+				// Paso 2: Comprobación de seguridad explícita. Si por alguna razón la respuesta
+				// es nula (incluso sin error), la ignoramos para evitar el pánico.
+				if resp == nil {
+					continue
 				}
+
+				// Si hemos llegado hasta aquí, 'resp' es un puntero válido.
+				// Ahora podemos usarlo y DEBEMOS cerrar su cuerpo.
+
+				if !hideCodesMap[resp.StatusCode] {
+					// Guardamos los valores en variables locales antes de cerrar el cuerpo.
+					statusCode := resp.StatusCode
+					contentLength := resp.ContentLength
+					// Limpiamos la línea de progreso antes de imprimir un resultado.
+					fmt.Printf("\r%s\r", strings.Repeat(" ", 80))
+					fmt.Printf("[+] Encontrado: %-60s (Código: %d, Tamaño: %d)\n", fullURL, statusCode, contentLength)
+				}
+
+				// Cerramos el cuerpo de la respuesta inmediatamente para liberar recursos.
+				// NO USAR DEFER DENTRO DE UN BUCLE.
 				resp.Body.Close()
+				// --- FIN DE LA CORRECCIÓN FINAL Y DEFINITIVA ---
 			}
 		}()
 	}
@@ -112,17 +124,25 @@ func runWebDirFuzzer(baseURL, wordlistPath string, concurrency int, hideCodesStr
 		go func() {
 			startTime := time.Now()
 			for {
-				time.Sleep(1 * time.Second)
+				time.Sleep(500 * time.Millisecond) // Actualizar más rápido
 				count := atomic.LoadInt64(&requestsCount)
-				if count >= int64(lines) {
+
+				// Salir del bucle de progreso solo cuando todas las tareas se hayan completado.
+				// Comparamos 'count' con 'lines' para saber cuándo hemos terminado.
+				if lines > 0 && count >= int64(lines) {
 					break
 				}
+
 				elapsed := time.Since(startTime).Seconds()
 				if elapsed < 1 {
 					elapsed = 1
 				}
 				rps := float64(count) / elapsed
-				fmt.Printf("\rProgreso: %d / %d (%d%%) | %.2f req/s", count, lines, (count*100)/int64(lines), rps)
+				if lines > 0 {
+					fmt.Printf("\rProgreso: %d / %d (%d%%) | %.2f req/s", count, lines, (count*100)/int64(lines), rps)
+				} else {
+					fmt.Printf("\rProgreso: %d | %.2f req/s", count, rps)
+				}
 			}
 		}()
 	}
@@ -134,6 +154,8 @@ func runWebDirFuzzer(baseURL, wordlistPath string, concurrency int, hideCodesStr
 	close(tasks)
 
 	wg.Wait()
+	// Esperar un poco para que la goroutine de progreso termine de imprimir.
+	time.Sleep(500 * time.Millisecond)
 	fmt.Printf("\r%s\n", strings.Repeat(" ", 80))
 	log.Println("Fuzzing completado.")
 }
